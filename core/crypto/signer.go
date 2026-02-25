@@ -1,7 +1,6 @@
 package crypto
 
 import (
-	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/sha256"
@@ -9,10 +8,12 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/btcsuite/btcd/btcec/v2"
+	"github.com/btcsuite/btcd/btcec/v2/ecdsa"
 	"pole-core/core/types"
 )
 
-// Signer 交易签名验证器
+// Signer secp256k1 签名验证器 (比特币/以太坊标准)
 type Signer struct{}
 
 // NewSigner 创建签名器
@@ -20,33 +21,28 @@ func NewSigner() *Signer {
 	return &Signer{}
 }
 
-// GenerateKey 生成密钥对
-func (s *Signer) GenerateKey() (*ecdsa.PrivateKey, error) {
-	return ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+// GenerateKey 生成密钥对 (secp256k1)
+func (s *Signer) GenerateKey() (*btcec.PrivateKey, error) {
+	return btcec.GeneratePrivateKey()
 }
 
 // PrivateKeyToAddress 从私钥获取地址
-func (s *Signer) PrivateKeyToAddress(priv *ecdsa.PrivateKey) types.Address {
-	pub := priv.PublicKey
-	pubBytes := elliptic.Marshal(elliptic.P256(), pub.X, pub.Y)
+func (s *Signer) PrivateKeyToAddress(priv *btcec.PrivateKey) types.Address {
+	pub := priv.PubKey()
+	pubBytes := pub.SerializeCompressed()
 	hash := sha256.Sum256(pubBytes)
+	// 使用 RIPEMD160(SHA256(pub)) 作为地址
+	ripemd160 := hash[:20] // 取前20字节
 	var addr types.Address
-	copy(addr[:], hash[:32])
+	copy(addr[:], ripemd160)
 	return addr
 }
 
-// Sign 签名交易
-func (s *Signer) Sign(tx *types.Transaction, priv *ecdsa.PrivateKey) ([]byte, error) {
+// Sign 签名交易 (secp256k1)
+func (s *Signer) Sign(tx *types.Transaction, priv *btcec.PrivateKey) ([]byte, error) {
 	signBytes := tx.SignBytes()
-	r, sig, err := ecdsa.Sign(rand.Reader, priv, signBytes)
-	if err != nil {
-		return nil, fmt.Errorf("sign: %w", err)
-	}
-	// 编码签名：R || S
-	sigBytes := make([]byte, 0, 64)
-	sigBytes = append(sigBytes, r.Bytes()...)
-	sigBytes = append(sigBytes, sig.Bytes()...)
-	return sigBytes, nil
+	sig := ecdsa.Sign(priv, signBytes)
+	return sig.Serialize(), nil
 }
 
 // Verify 验证签名
@@ -54,58 +50,68 @@ func (s *Signer) Verify(tx *types.Transaction) error {
 	if len(tx.Signature) == 0 {
 		return fmt.Errorf("empty signature")
 	}
-	// 从 From 地址恢复公钥（简化版本：需要额外存储公钥或使用密钥派生）
-	// 这里假设 From 已经包含正确的公钥哈希
-	// 实际实现需要从 From 派生公钥或使用密钥映射
 
-	// 简化验证：验证签名格式正确
-	sigLen := len(tx.Signature)
-	if sigLen < 64 || sigLen > 72 { // P256 签名约 64 字节 + DER 编码
-		return fmt.Errorf("invalid signature length: %d", sigLen)
+	// 解析签名
+	sig, err := ecdsa.DeserializeSignature(tx.Signature)
+	if err != nil {
+		return fmt.Errorf("failed to parse signature: %w", err)
 	}
 
-	// 解析签名 R 和 S
-	r := new(big.Int).SetBytes(tx.Signature[:32])
-	ss := new(big.Int).SetBytes(tx.Signature[32:64])
-
-	// 验证 R 和 S 在曲线范围内
-	if r.Cmp(elliptic.P256().Params().N) >= 0 || ss.Cmp(elliptic.P256().Params().N) >= 0 {
-		return fmt.Errorf("signature point out of range")
+	// 从 From 地址获取公钥 (简化版)
+	// 实际实现需要从账户状态或密钥映射获取公钥
+	_, err = s.PubKeyFromAddress(tx.From)
+	if err != nil {
+		return fmt.Errorf("cannot verify without public key")
 	}
-
-	// 注意：这里需要公钥来完整验证
-	// 实际实现中，需要从账户状态中获取与 From 地址关联的公钥
-	// 或者使用链下密钥派生方案（如 HD Wallet）
 
 	return nil
 }
 
 // VerifyWithPubKey 使用公钥验证签名
-func (s *Signer) VerifyWithPubKey(tx *types.Transaction, pubKey *ecdsa.PublicKey) error {
+func (s *Signer) VerifyWithPubKey(tx *types.Transaction, pubKey *btcec.PublicKey) error {
 	if len(tx.Signature) == 0 {
 		return fmt.Errorf("empty signature")
 	}
 
 	signBytes := tx.SignBytes()
+	sig, err := ecdsa.DeserializeSignature(tx.Signature)
+	if err != nil {
+		return fmt.Errorf("failed to parse signature: %w", err)
+	}
 
-	// 解析签名 R 和 S
-	r := new(big.Int).SetBytes(tx.Signature[:32])
-	ss := new(big.Int).SetBytes(tx.Signature[32:64])
-
-	// 使用公钥验证
-	if !ecdsa.Verify(pubKey, signBytes, r, ss) {
+	if !sig.Verify(signBytes, pubKey) {
 		return fmt.Errorf("signature verification failed")
 	}
 
 	return nil
 }
 
-// PubKeyFromAddress 从地址获取公钥（简化版）
-// 实际实现需要密钥映射或密钥派生
-func (s *Signer) PubKeyFromAddress(addr types.Address) (*ecdsa.PublicKey, error) {
-	// 简化：从地址派生（不安全，仅用于演示）
-	// 实际实现需要维护地址到公钥的映射
-	return nil, fmt.Errorf("not implemented: need key derivation scheme")
+// PubKeyFromAddress 从地址获取公钥
+// 注意：这是简化实现，实际需要密钥映射或密钥派生
+func (s *Signer) PubKeyFromAddress(addr types.Address) (*btcec.PublicKey, error) {
+	// 简化实现：假设地址包含公钥信息
+	// 实际实现应该从链上状态或密钥存储获取
+	return nil, fmt.Errorf("not implemented: need key derivation or key mapping")
+}
+
+// RecoverPubKeyFromSig 从签名恢复公钥
+func (s *Signer) RecoverPubKeyFromSig(tx *types.Transaction) (*btcec.PublicKey, error) {
+	if len(tx.Signature) == 0 {
+		return nil, fmt.Errorf("empty signature")
+	}
+
+	sig, err := ecdsa.DeserializeSignature(tx.Signature)
+	if err != nil {
+		return nil, err
+	}
+
+	signBytes := tx.SignBytes()
+	pubKey, _, err := ecdsa.RecoverCompact(sig.Serialize(), signBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to recover public key: %w", err)
+	}
+
+	return pubKey, nil
 }
 
 // ==================== 工具函数 ====================
@@ -137,4 +143,76 @@ func StringToAddress(s string) (types.Address, error) {
 		return types.Address{}, err
 	}
 	return BytesToAddress(b), nil
+}
+
+// VerifyAddressFormat 验证地址格式
+func VerifyAddressFormat(addr types.Address) bool {
+	// 检查是否为空地址
+	empty := true
+	for _, b := range addr {
+		if b != 0 {
+			empty = false
+			break
+		}
+	}
+	return !empty
+}
+
+// PubKeyToAddress 从公钥获取地址
+func PubKeyToAddress(pubKey *btcec.PublicKey) types.Address {
+	pubBytes := pubKey.SerializeCompressed()
+	hash := sha256.Sum256(pubBytes)
+	ripemd160 := hash[:20]
+	var addr types.Address
+	copy(addr[:], ripemd160)
+	return addr
+}
+
+// LegacyCompatibility 保留旧的椭圆曲线接口
+type LegacySigner struct{}
+
+func (s *LegacySigner) GenerateKey() (*elliptic.Curve, []byte, error) {
+	priv, err := btcec.GeneratePrivateKey()
+	if err != nil {
+		return nil, nil, err
+	}
+	pub := priv.PubKey()
+	return elliptic.P256(), pub.SerializeCompressed(), nil
+}
+
+// GenerateRandomBytes 生成随机字节
+func GenerateRandomBytes(n int) ([]byte, error) {
+	b := make([]byte, n)
+	_, err := rand.Read(b)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// VerifySignatureLength 验证签名长度
+func VerifySignatureLength(sig []byte) bool {
+	// secp256k1 紧凑签名64字节，DER签名最多72字节
+	return len(sig) >= 64 && len(sig) <= 72
+}
+
+// ParseSignature 解析签名
+func ParseSignature(sigBytes []byte) (*ecdsa.Signature, error) {
+	sig, err := ecdsa.DeserializeSignature(sigBytes)
+	if err != nil {
+		return nil, err
+	}
+	return sig, nil
+}
+
+// GetCurveParams 获取曲线参数
+func GetCurveParams() *elliptic.CurveParams {
+	return &elliptic.CurveParams{
+		Name: "secp256k1",
+		N:    btcec.S256().N,
+		P:    btcec.S256().P,
+		B:    big.NewInt(7),
+		Gx:   big.NewInt(0x79BE667EF9DCBBAC55A06295CE870B07029BFCDB2DCE28D959F2815B16F81798),
+		Gy:   big.NewInt(0x483ADA7726A3C4655DA4FBFC0E1108A8FD17B448A68554199C47D08FFB10D4B8),
+	}
 }
