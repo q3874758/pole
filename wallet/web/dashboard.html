@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PoLE 节点监控</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --primary: #00d4ff;
+            --success: #00ff88;
+            --warning: #ffaa00;
+            --danger: #ff4757;
+            --bg-dark: #0a0e17;
+            --bg-card: rgba(255,255,255,0.05);
+            --text: #fff;
+            --text-dim: #888;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: linear-gradient(90deg, #0a0e17 0%, #1a1f35 100%);
+            padding: 20px 40px;
+            border-bottom: 1px solid rgba(0,212,255,0.2);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: var(--primary);
+        }
+        
+        .nav {
+            display: flex;
+            gap: 30px;
+        }
+        
+        .nav a {
+            color: var(--text-dim);
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+        
+        .nav a:hover, .nav a.active {
+            color: var(--primary);
+            background: rgba(0,212,255,0.1);
+        }
+        
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(0,255,136,0.1);
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 30px 40px;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+        
+        .stat-value.primary { color: var(--primary); }
+        .stat-value.success { color: var(--success); }
+        .stat-value.warning { color: var(--warning); }
+        .stat-value.danger { color: var(--danger); }
+        
+        .stat-change {
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        
+        .stat-change.up { color: var(--success); }
+        .stat-change.down { color: var(--danger); }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .chart-container {
+            height: 250px;
+        }
+        
+        .table-card {
+            background: var(--bg-card);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        .table-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        
+        th {
+            color: var(--text-dim);
+            font-weight: 500;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        
+        tr:hover td {
+            background: rgba(255,255,255,0.02);
+        }
+        
+        .validator-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .stake-bar {
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        
+        .stake-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--success));
+            border-radius: 3px;
+        }
+        
+        .network-viz {
+            position: relative;
+            height: 400px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+        
+        .node {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.3s;
+        }
+        
+        .node:hover {
+            transform: scale(1.2);
+            z-index: 10;
+        }
+        
+        .node-central {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--primary), #6366f1);
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 20px;
+        }
+        
+        .node-validator {
+            background: var(--success);
+        }
+        
+        .node-peer {
+            background: var(--text-dim);
+        }
+        
+        .connection-line {
+            position: absolute;
+            height: 1px;
+            background: rgba(0,212,255,0.3);
+            transform-origin: left center;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: rgba(255,255,255,0.05);
+            padding: 4px;
+            border-radius: 8px;
+        }
+        
+        .tab {
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        
+        .tab.active {
+            background: var(--primary);
+            color: #000;
+        }
+        
+        .time-selector {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .time-btn {
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            background: rgba(255,255,255,0.05);
+            border: none;
+            color: var(--text-dim);
+        }
+        
+        .time-btn.active {
+            background: var(--primary);
+            color: #000;
+        }
+        
+        .progress-ring {
+            width: 120px;
+            height: 120px;
+            position: relative;
+        }
+        
+        .progress-ring svg {
+            transform: rotate(-90deg);
+        }
+        
+        .progress-ring text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .tx-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .tx-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            font-size: 13px;
+        }
+        
+        .tx-hash {
+            font-family: monospace;
+            color: var(--primary);
+        }
+        
+        .tx-amount {
+            color: var(--success);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">⬡ PoLE 节点监控</div>
+        <nav class="nav">
+            <a href="#" class="active">仪表板</a>
+            <a href="#">区块</a>
+            <a href="#">交易</a>
+            <a href="#">验证者</a>
+            <a href="#">网络</a>
+        </nav>
+        <div class="status-badge">
+            <div class="status-dot"></div>
+            <span>运行中</span>
+            <span style="color: var(--text-dim)">|</span>
+            <span id="chainId">pole-mainnet-1</span>
+        </div>
+    </header>
+    
+    <div class="container">
+        <!-- 核心指标 -->
+        <div class="grid">
+            <div class="stat-card">
+                <div class="stat-label">当前高度</div>
+                <div class="stat-value primary" id="blockHeight">12,456,789</div>
+                <div class="stat-change up">↑ 5.2s/块</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">节点数量</div>
+                <div class="stat-value success" id="peerCount">21</div>
+                <div class="stat-change">活跃验证者</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">总质押</div>
+                <div class="stat-value" id="totalStake">98.5M</div>
+                <div class="stat-change">POLE</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">24h 交易</div>
+                <div class="stat-value warning" id="txCount">1.2M</div>
+                <div class="stat-change up">↑ 15%</div>
+            </div>
+        </div>
+        
+        <!-- 图表 -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <div class="chart-title">
+                    <span>出块时间趋势</span>
+                    <div class="time-selector">
+                        <button class="time-btn">1H</button>
+                        <button class="time-btn active">24H</button>
+                        <button class="time-btn">7D</button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="blockTimeChart"></canvas>
+                </div>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">网络健康</div>
+                <div style="display: flex; justify-content: center; align-items: center; height: 200px;">
+                    <div class="progress-ring">
+                        <svg width="120" height="120">
+                            <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="8"/>
+                            <circle cx="60" cy="60" r="50" fill="none" stroke="var(--success)" stroke-width="8" 
+                                stroke-dasharray="314" stroke-dashoffset="31" stroke-linecap="round"/>
+                        </svg>
+                        <text style="color: var(--success)">98%</text>
+                    </div>
+                </div>
+                <div style="text-align: center; color: var(--text-dim); margin-top: 10px;">
+                    正常运行时间
+                </div>
+            </div>
+        </div>
+        
+        <!-- 验证者和交易 -->
+        <div class="charts-grid">
+            <div class="table-card">
+                <div class="table-title">活跃验证者</div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>验证者</th>
+                            <th>质押</th>
+                            <th>佣金</th>
+                            <th>状态</th>
+                        </tr>
+                    </thead>
+                    <tbody id="validatorsTable">
+                        <tr>
+                            <td>1</td>
+                            <td><div class="validator-avatar">V1</div> polevaloper1...</td>
+                            <td><div class="stake-bar"><div class="stake-fill" style="width: 85%"></div></div></td>
+                            <td>5%</td>
+                            <td style="color: var(--success)">活跃</td>
+                        </tr>
+                        <tr>
+                            <td>2</td>
+                            <td><div class="validator-avatar">V2</div> polevaloper2...</td>
+                            <td><div class="stake-bar"><div class="stake-fill" style="width: 65%"></div></div></td>
+                            <td>5%</td>
+                            <td style="color: var(--success)">活跃</td>
+                        </tr>
+                        <tr>
+                            <td>3</td>
+                            <td><div class="validator-avatar">V3</div> polevaloper3...</td>
+                            <td><div class="stake-bar"><div class="stake-fill" style="width: 45%"></div></div></td>
+                            <td>10%</td>
+                            <td style="color: var(--success)">活跃</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="table-card">
+                <div class="table-title">最近交易</div>
+                <div class="tx-list" id="txList">
+                    <div class="tx-item">
+                        <span class="tx-hash">0x1a2b...3c4d</span>
+                        <span class="tx-amount">+1,000 POLE</span>
+                    </div>
+                    <div class="tx-item">
+                        <span class="tx-hash">0x5e6f...7g8h</span>
+                        <span class="tx-amount">+500 POLE</span>
+                    </div>
+                    <div class="tx-item">
+                        <span class="tx-hash">0x9i0j...1k2l</span>
+                        <span class="tx-amount">+2,000 POLE</span>
+                    </div>
+                    <div class="tx-item">
+                        <span class="tx-hash">0x3m4n...5o6p</span>
+                        <span class="tx-amount">质押</span>
+                    </div>
+                    <div class="tx-item">
+                        <span class="tx-hash">0x7q8r...9s0t</span>
+                        <span class="tx-amount">+800 POLE</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 网络可视化 -->
+        <div class="chart-card" style="margin-top: 20px;">
+            <div class="chart-title">
+                <span>P2P 网络拓扑</span>
+                <div class="tabs">
+                    <div class="tab active">拓扑</div>
+                    <div class="tab">列表</div>
+                </div>
+            </div>
+            <div class="network-viz" id="networkViz">
+                <!-- 动态生成节点 -->
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 初始化图表
+        const ctx = document.getElementById('blockTimeChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array.from({length: 24}, (_, i) => `${i}:00`),
+                datasets: [{
+                    label: '出块时间 (秒)',
+                    data: Array.from({length: 24}, () => 5 + Math.random() * 3),
+                    borderColor: '#00d4ff',
+                    backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#888' }
+                    },
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#888' }
+                    }
+                }
+            }
+        });
+        
+        // 模拟更新数据
+        function updateStats() {
+            const height = parseInt(document.getElementById('blockHeight').textContent.replace(/,/g, ''));
+            document.getElementById('blockHeight').textContent = (height + 1).toLocaleString();
+            
+            const peers = document.getElementById('peerCount');
+            peers.textContent = 21 + Math.floor(Math.random() * 3);
+        }
+        
+        setInterval(updateStats, 5200);
+        
+        // 生成网络拓扑
+        function generateNetwork() {
+            const container = document.getElementById('networkViz');
+            const centerX = container.offsetWidth / 2;
+            const centerY = container.offsetHeight / 2;
+            const radius = 150;
+            
+            // 中心节点（当前节点）
+            const central = document.createElement('div');
+            central.className = 'node node-central';
+            central.textContent = 'POLE';
+            central.style.left = (centerX - 30) + 'px';
+            central.style.top = (centerY - 30) + 'px';
+            container.appendChild(central);
+            
+            // 验证者节点
+            for (let i = 0; i < 7; i++) {
+                const angle = (i / 7) * Math.PI * 2;
+                const x = centerX + Math.cos(angle) * radius - 20;
+                const y = centerY + Math.sin(angle) * radius - 20;
+                
+                const node = document.createElement('div');
+                node.className = 'node node-validator';
+                node.textContent = 'V' + (i + 1);
+                node.style.left = x + 'px';
+                node.style.top = y + 'px';
+                node.title = `验证者 ${i + 1}`;
+                container.appendChild(node);
+                
+                // 连接线
+                const line = document.createElement('div');
+                line.className = 'connection-line';
+                const length = Math.sqrt(Math.pow(x + 20 - centerX, 2) + Math.pow(y + 20 - centerY, 2));
+                const deg = Math.atan2(y + 20 - centerY, x + 20 - centerX) * 180 / Math.PI;
+                line.style.width = length + 'px';
+                line.style.left = centerX + 'px';
+                line.style.top = centerY + 'px';
+                line.style.transform = `rotate(${deg}deg)`;
+                container.appendChild(line);
+            }
+            
+            // 普通节点
+            for (let i = 0; i < 14; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const r = 100 + Math.random() * 80;
+                const x = centerX + Math.cos(angle) * r - 15;
+                const y = centerY + Math.sin(angle) * r - 15;
+                
+                const node = document.createElement('div');
+                node.className = 'node node-peer';
+                node.textContent = 'P' + (i + 1);
+                node.style.left = x + 'px';
+                node.style.top = y + 'px';
+                node.style.opacity = 0.3 + Math.random() * 0.7;
+                node.title = `节点 ${i + 1}`;
+                container.appendChild(node);
+            }
+        }
+        
+        generateNetwork();
+        
+        // 从 API 获取真实数据
+        async function fetchData() {
+            try {
+                const [healthRes, statusRes] = await Promise.all([
+                    fetch('/health'),
+                    fetch('/status')
+                ]);
+                
+                const health = await healthRes.json();
+                const status = await statusRes.json();
+                
+                if (health.components) {
+                    // 更新健康状态
+                }
+                
+                if (status.data) {
+                    document.getElementById('blockHeight').textContent = 
+                        status.data.height.toLocaleString();
+                }
+            } catch (e) {
+                console.log('使用模拟数据');
+            }
+        }
+        
+        fetchData();
+    </script>
+</body>
+</html>

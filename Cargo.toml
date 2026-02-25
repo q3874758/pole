@@ -1,0 +1,12 @@
+[workspace]
+members = [
+    "core/types",
+    "core/consensus",
+    "data/collector",
+    "data/availability",
+    "execution/engine",
+    "token/economy",
+    "token/rewards",
+    "governance",
+    "network/p2p",
+]

@@ -1,0 +1,15 @@
+[package]
+name = "pole-p2p"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+pole-types = { path = "../../core/types" }
+tokio = { version = "1.35", features = ["full"] }
+async-trait = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+tracing = "0.1"
+libp2p = { version = "0.53", features = ["tcp", "quic", "noise", "yamux", "gossipsub", "mdns"] }
+futures = "0.3"

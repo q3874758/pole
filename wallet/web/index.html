@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PoLE 钱包</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .logo {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+
+        .network-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #888;
+        }
+
+        .header-links {
+            display: flex;
+            gap: 12px;
+        }
+
+        .header-links a {
+            color: #888;
+            text-decoration: none;
+            font-size: 13px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.05);
+            transition: all 0.2s;
+        }
+
+        .header-links a:hover {
+            color: #00d4ff;
+            background: rgba(0,212,255,0.1);
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #00ff88;
+            animation: pulse 2s infinite;
+            flex-shrink: 0;
+        }
+        .status-dot.offline {
+            background: #ff4444;
+            animation: none;
+            opacity: 0.9;
+        }
+        .status-dot.checking {
+            background: #ffaa00;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .node-status-label { font-weight: 600; color: #00ff88; margin-right: 4px; }
+        .node-status-label.offline { color: #ff4444; }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 30px;
+            margin-top: 30px;
+        }
+
+        @media (max-width: 900px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: rgba(255,255,255,0.05);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(10px);
+        }
+
+        .balance-section {
+            text-align: center;
+            padding: 40px 20px;
+        }
+
+        .balance-label {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 10px;
+        }
+
+        .balance-amount {
+            font-size: 48px;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+
+        .balance-symbol {
+            font-size: 20px;
+            color: #888;
+            margin-left: 8px;
+        }
+
+        .address-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .address-label {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 8px;
+        }
+
+        .address-display {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0,0,0,0.3);
+            padding: 12px 16px;
+            border-radius: 8px;
+        }
+
+        .address-text {
+            flex: 1;
+            font-family: monospace;
+            font-size: 14px;
+            color: #00ff88;
+            word-break: break-all;
+        }
+
+        .copy-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        .copy-btn:hover {
+            background: rgba(0,212,255,0.3);
+        }
+
+        .copy-btn.copied {
+            background: rgba(0,255,136,0.3);
+        }
+        .backup-link {
+            font-size: 13px;
+            color: #00d4ff;
+            text-decoration: none;
+        }
+        .backup-link:hover { text-decoration: underline; }
+
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 24px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 14px;
+            background: rgba(255,255,255,0.05);
+            border: none;
+            color: #fff;
+            font-size: 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, #00d4ff, #0099ff);
+        }
+
+        .tab-btn:hover:not(.active) {
+            background: rgba(255,255,255,0.1);
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 14px 16px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
+            color: #fff;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: #00d4ff;
+            box-shadow: 0 0 20px rgba(0,212,255,0.2);
+        }
+
+        .form-input::placeholder {
+            color: #555;
+        }
+
+        .max-btn {
+            background: rgba(0,212,255,0.2);
+            border: none;
+            color: #00d4ff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+
+        .send-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #00d4ff, #0099ff);
+            border: none;
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .send-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0,212,255,0.3);
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .tx-history {
+            margin-top: 30px;
+        }
+
+        .tx-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            margin-bottom: 10px;
+        }
+
+        .tx-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .tx-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        .tx-icon.send {
+            background: rgba(255,77,77,0.2);
+            color: #ff4d4d;
+        }
+
+        .tx-icon.receive {
+            background: rgba(0,255,136,0.2);
+            color: #00ff88;
+        }
+
+        .tx-details h4 {
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .tx-details p {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .tx-amount {
+            text-align: right;
+        }
+
+        .tx-amount.send {
+            color: #ff4d4d;
+        }
+
+        .tx-amount.receive {
+            color: #00ff88;
+        }
+
+        .tx-amount .amount {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .tx-amount .time {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .qr-section {
+            text-align: center;
+            padding: 40px;
+        }
+
+        .qr-code {
+            width: 200px;
+            height: 200px;
+            margin: 20px auto;
+            background: #fff;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .qr-placeholder {
+            color: #1a1a2e;
+            font-size: 12px;
+        }
+
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(0,212,255,0.3);
+            border-top-color: #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .toast {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0,255,136,0.9);
+            color: #000;
+            padding: 16px 32px;
+            border-radius: 10px;
+            font-weight: 500;
+            opacity: 0;
+            transition: all 0.3s;
+            z-index: 1000;
+        }
+
+        .toast.show {
+            opacity: 1;
+        }
+
+        .toast.error {
+            background: rgba(255,77,77,0.9);
+        }
+
+        .footer {
+            text-align: center;
+            padding: 40px;
+            color: #555;
+            font-size: 12px;
+        }
+
+        /* 监控面板 */
+        .monitor-panel {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .monitor-card {
+            background: rgba(255,255,255,0.06);
+            border-radius: 12px;
+            padding: 16px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .monitor-card .label {
+            font-size: 12px;
+            color: #888;
+            margin-bottom: 6px;
+        }
+        .monitor-card .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+        .monitor-card .unit {
+            font-size: 12px;
+            color: #666;
+            margin-left: 4px;
+        }
+        .monitor-card.healthy .value { color: #00ff88; }
+        .monitor-card.warning .value { color: #ffaa00; }
+        @media (max-width: 700px) {
+            .monitor-panel { grid-template-columns: repeat(2, 1fr); }
+        }
+        .vesting-card .vesting-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; color: #ccc; }
+        .vesting-card .vesting-row .v-num { color: #00d4ff; }
+        .vesting-card .vesting-locked { color: #ffaa00; margin-top: 8px; font-size: 13px; }
+        .vesting-claim-btn {
+            margin-top: 12px; width: 100%; padding: 10px; border: none; border-radius: 8px;
+            background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%); color: #fff; font-weight: 600; cursor: pointer;
+        }
+        .vesting-claim-btn:hover { opacity: 0.9; }
+        .vesting-claim-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .mining-badge {
+            position: fixed; right: 20px; bottom: 20px; z-index: 1000;
+            padding: 10px 16px; border-radius: 10px; font-size: 14px; font-weight: 500;
+            background: linear-gradient(135deg, rgba(0,212,255,0.25) 0%, rgba(0,153,204,0.3) 100%);
+            border: 1px solid rgba(0,212,255,0.5); color: #00d4ff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .mining-badge .count { color: #888; font-size: 12px; margin-left: 6px; }
+    </style>
+</head>
+<body>
+    <noscript><p style="padding:20px;text-align:center;color:#ffaa00;">请启用 JavaScript 以使用钱包</p></noscript>
+    <div class="container" id="app-container">
+        <header>
+            <div class="logo">◈ POLE 钱包</div>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <div class="header-links">
+                    <a href="/metrics" target="_blank" title="Prometheus 指标">📊 指标</a>
+                    <a href="/health" target="_blank" title="健康检查">❤️ 健康</a>
+                    <a href="/status" target="_blank" title="链状态">⛓️ 状态</a>
+                </div>
+                <div class="network-status" id="network-status-wrap">
+                    <div class="status-dot checking" id="status-dot" title="节点状态"></div>
+                    <span><span class="node-status-label" id="node-label">检查节点…</span><span id="network-status"></span></span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 监控面板：区块高度、交易数、节点数、运行时间 -->
+        <div class="monitor-panel" id="monitor-panel">
+            <div class="monitor-card">
+                <div class="label">区块高度</div>
+                <div class="value"><span id="mon-height">--</span></div>
+            </div>
+            <div class="monitor-card">
+                <div class="label">交易数</div>
+                <div class="value"><span id="mon-tx">--</span></div>
+            </div>
+            <div class="monitor-card">
+                <div class="label">节点数</div>
+                <div class="value"><span id="mon-peers">--</span></div>
+            </div>
+            <div class="monitor-card">
+                <div class="label">运行时间</div>
+                <div class="value"><span id="mon-uptime">--</span></div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="left-section">
+                <div class="card balance-section">
+                    <div class="balance-label">总余额</div>
+                    <div class="balance-amount">
+                        <span id="balance">0.00</span>
+                        <span class="balance-symbol">POLE</span>
+                    </div>
+
+                    <div class="address-section">
+                        <div class="address-label">我的地址</div>
+                        <div class="address-display">
+                            <span class="address-text" id="address">加载中...</span>
+                            <button class="copy-btn" onclick="copyAddress()">复制</button>
+                        </div>
+                        <div style="margin-top: 12px;">
+                            <a href="#" id="backup-wallet-btn" class="backup-link" onclick="downloadWalletBackup(); return false;">📥 备份钱包（防丢失）</a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 锁仓领取：锁仓期满后在此领取团队/投资人线性释放 -->
+                <div class="card vesting-card" id="vesting-card" style="margin-top: 20px;">
+                    <h3 style="margin-bottom: 12px;">🔒 锁仓领取</h3>
+                    <div id="vesting-status">
+                        <div class="loading" style="min-height: 40px;"><div class="spinner"></div></div>
+                    </div>
+                    <button type="button" class="vesting-claim-btn" id="vesting-claim-btn" style="display: none;" onclick="claimVesting()">领取已解锁</button>
+                </div>
+
+                <!-- 挖矿奖励：Play-to-Earn 待领奖励 -->
+                <div class="card vesting-card" id="mining-card" style="margin-top: 20px;">
+                    <h3 style="margin-bottom: 12px;">⛏️ 挖矿奖励</h3>
+                    <div id="mining-status">
+                        <div class="loading" style="min-height: 40px;"><div class="spinner"></div></div>
+                    </div>
+                    <button type="button" class="vesting-claim-btn" id="mining-claim-btn" style="display: none;" onclick="claimMining()">领取挖矿奖励</button>
+                </div>
+
+                <div class="card" style="margin-top: 20px;">
+                    <div class="tab-buttons">
+                        <button class="tab-btn active" onclick="switchTab('send')">发送</button>
+                        <button class="tab-btn" onclick="switchTab('receive')">接收</button>
+                    </div>
+
+                    <div id="send-form">
+                        <div class="form-group">
+                            <label class="form-label">收款地址</label>
+                            <input type="text" class="form-input" id="to-address" placeholder="输入收款人地址">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">金额 (POLE)</label>
+                            <input type="number" class="form-input" id="amount" placeholder="0.00" step="0.00000001">
+                            <button class="max-btn" onclick="setMaxAmount()">最大</button>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">手续费 (POLE)</label>
+                            <input type="number" class="form-input" id="fee" value="0.001" step="0.0001">
+                        </div>
+                        <button class="send-btn" onclick="sendTransaction()">发送 POLE</button>
+                    </div>
+
+                    <div id="receive-form" style="display: none;">
+                        <div class="qr-section">
+                            <div class="qr-code">
+                                <div class="qr-placeholder">
+                                    <svg width="150" height="150" viewBox="0 0 150 150">
+                                        <rect x="10" y="10" width="40" height="40" fill="#000"/>
+                                        <rect x="60" y="10" width="40" height="40" fill="#000"/>
+                                        <rect x="110" y="10" width="30" height="30" fill="#000"/>
+                                        <rect x="10" y="60" width="30" height="30" fill="#000"/>
+                                        <rect x="50" y="50" width="60" height="60" fill="none" stroke="#000" stroke-width="5"/>
+                                        <rect x="70" y="70" width="20" height="20" fill="#000"/>
+                                    </svg>
+                                </div>
+                            </div>
+                            <p style="color: #888; margin-top: 20px;">扫描二维码向我付款</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="right-section">
+                <div class="card">
+                    <h3 style="margin-bottom: 20px;">交易记录</h3>
+                    <div id="tx-history">
+                        <div class="loading">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            PoLE Wallet v1.0 | 构建去中心化游戏价值网络
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+    <div class="mining-badge" id="mining-badge" style="display: none;" title="检测到运行中的游戏，正在挖矿">⛏️ 正在挖矿</div>
+
+    <script>
+        // 自动检测协议
+        // 与当前页面同源，避免协议/端口不一致导致连接失败
+        const API_BASE = window.location.origin;
+        let currentAddress = '';
+
+        // 初始化
+        async function init() {
+            try {
+                // 获取链状态
+                const statusRes = await fetch(`${API_BASE}/status`);
+                const status = await statusRes.json();
+                
+                if (!status.success) {
+                    showToast('无法连接到节点', true);
+                    setNodeStatus(false);
+                    return;
+                }
+
+                // 显示：节点运行中 · #height | chainId
+                const chainId = status.data.chain_id;
+                const height = status.data.height;
+                setNodeStatus(true, height, chainId);
+
+                // 刷新监控面板
+                await refreshMonitorPanel();
+
+                // 从钱包加载地址
+                const wallet = await loadWallet();
+                if (wallet && wallet.accounts && wallet.accounts.length > 0) {
+                    currentAddress = wallet.accounts[0].address;
+                    document.getElementById('address').textContent = currentAddress;
+                    
+                    // 获取余额、锁仓与挖矿状态
+                    await updateBalance();
+                    await refreshVestingStatus();
+                    await refreshMiningStatus();
+                } else {
+                    showToast('请先创建钱包账户', true);
+                    document.getElementById('vesting-status').innerHTML = '<p style="color:#888;">请先创建或加载钱包</p>';
+                    document.getElementById('mining-status').innerHTML = '<p style="color:#888;">请先创建或加载钱包</p>';
+                }
+
+                // 定期更新状态与监控面板
+                setInterval(async () => {
+                    try {
+                        const s = await fetch(`${API_BASE}/status`).then(r => r.json());
+                        if (s.success) {
+                            setNodeStatus(true, s.data.height, s.data.chain_id);
+                        } else {
+                            setNodeStatus(false);
+                        }
+                        refreshMonitorPanel();
+                    } catch {
+                        setNodeStatus(false);
+                    }
+                }, 5000);
+
+                // 定期刷新挖矿/锁仓状态（便于自动发放后看到最新待领）
+                if (currentAddress) {
+                    setInterval(function() {
+                        if (currentAddress) {
+                            refreshMiningStatus();
+                            refreshVestingStatus();
+                        }
+                    }, 60000);
+                }
+
+                // 右下角「正在挖矿」提示：检测到游戏运行时显示
+                updateMiningBadge();
+                setInterval(updateMiningBadge, 8000);
+
+            } catch (e) {
+                console.error(e);
+                showToast('连接失败: ' + e.message, true);
+                setNodeStatus(false);
+            }
+        }
+
+        function setNodeStatus(online, height, chainId) {
+            const dot = document.getElementById('status-dot');
+            const label = document.getElementById('node-label');
+            const detail = document.getElementById('network-status');
+            if (online) {
+                dot.classList.remove('checking', 'offline');
+                label.textContent = '节点运行中';
+                label.classList.remove('offline');
+                detail.textContent = (height != null && chainId) ? ` · #${height} | ${chainId}` : '';
+            } else {
+                dot.classList.remove('checking');
+                dot.classList.add('offline');
+                label.textContent = '节点未连接';
+                label.classList.add('offline');
+                detail.textContent = '';
+            }
+        }
+
+        function parseMetricsText(text) {
+            const o = {};
+            const re = /^pole_(block_height|tx_count|peer_count|uptime_seconds)\s+(\d+)/gm;
+            let m;
+            while ((m = re.exec(text)) !== null) {
+                o[m[1]] = parseInt(m[2], 10);
+            }
+            return o;
+        }
+
+        function formatUptime(seconds) {
+            if (seconds == null || isNaN(seconds)) return '--';
+            if (seconds < 60) return seconds + ' 秒';
+            const m = Math.floor(seconds / 60);
+            const s = seconds % 60;
+            if (m < 60) return m + ' 分 ' + s + ' 秒';
+            const h = Math.floor(m / 60);
+            const mm = m % 60;
+            if (h < 24) return h + ' 时 ' + mm + ' 分';
+            const d = Math.floor(h / 24);
+            const hh = h % 24;
+            return d + ' 天 ' + hh + ' 时';
+        }
+
+        function weiToPole(weiStr) {
+            if (!weiStr || weiStr === '0') return '0';
+            const w = BigInt(weiStr);
+            const one = BigInt(1e18);
+            const intPart = w / one;
+            const frac = (w % one).toString().padStart(18, '0').slice(0, 4);
+            return frac === '0000' ? intPart.toString() : intPart + '.' + frac.replace(/0+$/, '');
+        }
+
+        async function refreshVestingStatus() {
+            const el = document.getElementById('vesting-status');
+            const btn = document.getElementById('vesting-claim-btn');
+            if (!currentAddress) {
+                el.innerHTML = '<p style="color:#888;">请先加载钱包</p>';
+                btn.style.display = 'none';
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/vesting/status?address=${encodeURIComponent(currentAddress)}`);
+                const json = await res.json();
+                if (!json.success) {
+                    el.innerHTML = '<p style="color:#888;">暂无锁仓计划</p>';
+                    btn.style.display = 'none';
+                    return;
+                }
+                const d = json.data;
+                if (!d.has_schedule) {
+                    el.innerHTML = '<p style="color:#888;">当前地址暂无锁仓计划</p>';
+                    btn.style.display = 'none';
+                    return;
+                }
+                const total = weiToPole(d.total);
+                const claimed = weiToPole(d.claimed);
+                const claimable = weiToPole(d.claimable);
+                const now = Math.floor(Date.now() / 1000);
+                const locked = now < d.lock_until;
+                let html = '';
+                html += '<div class="vesting-row"><span>锁仓总量</span><span class="v-num">' + total + ' POLE</span></div>';
+                html += '<div class="vesting-row"><span>已领取</span><span class="v-num">' + claimed + ' POLE</span></div>';
+                html += '<div class="vesting-row"><span>可领取</span><span class="v-num">' + claimable + ' POLE</span></div>';
+                if (locked) {
+                    const t = new Date(d.lock_until * 1000);
+                    html += '<div class="vesting-locked">⏳ 锁仓期内，解锁时间：' + t.toLocaleString() + '</div>';
+                }
+                el.innerHTML = html;
+                const canClaim = !locked && claimable !== '0' && parseFloat(claimable) > 0;
+                btn.style.display = 'inline-block';
+                btn.disabled = !canClaim;
+            } catch (e) {
+                el.innerHTML = '<p style="color:#888;">获取锁仓状态失败</p>';
+                btn.style.display = 'none';
+            }
+        }
+
+        async function claimVesting() {
+            const btn = document.getElementById('vesting-claim-btn');
+            if (btn.disabled) return;
+            btn.disabled = true;
+            try {
+                const res = await fetch(`${API_BASE}/vesting/claim`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ address: currentAddress })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    const amount = weiToPole(json.data.claimed);
+                    showToast('已领取 ' + amount + ' POLE');
+                    await updateBalance();
+                    await refreshVestingStatus();
+                } else {
+                    showToast(json.error || '领取失败', true);
+                    await refreshVestingStatus();
+                }
+            } catch (e) {
+                showToast('领取失败: ' + e.message, true);
+                await refreshVestingStatus();
+            }
+            btn.disabled = false;
+        }
+
+        function updateMiningBadge() {
+            const el = document.getElementById('mining-badge');
+            if (!el) return;
+            fetch(`${API_BASE}/mining/detected`).then(function(r) { return r.json(); }).then(function(json) {
+                if (!json.success || !json.data) { el.style.display = 'none'; return; }
+                var enabled = json.data.enabled;
+                var detected = json.data.detected || [];
+                if (enabled && detected.length > 0) {
+                    el.style.display = 'block';
+                    el.innerHTML = '⛏️ 正在挖矿<span class="count">' + detected.length + ' 个游戏</span>';
+                    el.title = '检测到运行中的游戏，正在挖矿';
+                } else {
+                    el.style.display = 'none';
+                }
+            }).catch(function() { el.style.display = 'none'; });
+        }
+
+        async function refreshMiningStatus() {
+            const el = document.getElementById('mining-status');
+            const btn = document.getElementById('mining-claim-btn');
+            if (!currentAddress) {
+                el.innerHTML = '<p style="color:#888;">请先加载钱包</p>';
+                btn.style.display = 'none';
+                return;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/mining/balance?address=${encodeURIComponent(currentAddress)}`);
+                const json = await res.json();
+                if (!json.success) {
+                    el.innerHTML = '<p style="color:#888;">' + (json.error || '获取挖矿余额失败') + '</p>';
+                    btn.style.display = 'none';
+                    return;
+                }
+                const d = json.data;
+                const pending = (d.pending != null && d.pending !== '') ? d.pending : '0';
+                const count = d.pending_count != null ? d.pending_count : 0;
+                let html = '<div class="vesting-row"><span>待领取</span><span class="v-num">' + pending + ' POLE</span></div>';
+                if (count > 0) html += '<div class="vesting-row"><span>待确认笔数</span><span class="v-num">' + count + '</span></div>';
+                el.innerHTML = html;
+                const canClaim = parseFloat(pending) > 0;
+                btn.style.display = 'inline-block';
+                btn.disabled = !canClaim;
+            } catch (e) {
+                el.innerHTML = '<p style="color:#888;">获取挖矿余额失败</p>';
+                btn.style.display = 'none';
+            }
+        }
+
+        async function claimMining() {
+            const btn = document.getElementById('mining-claim-btn');
+            if (btn.disabled) return;
+            btn.disabled = true;
+            try {
+                const res = await fetch(`${API_BASE}/mining/claim`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ address: currentAddress })
+                });
+                const json = await res.json();
+                if (json.success) {
+                    const amount = (json.data && json.data.claimed != null) ? json.data.claimed : '0';
+                    showToast('已领取挖矿奖励 ' + amount + ' POLE');
+                    await updateBalance();
+                    await refreshMiningStatus();
+                } else {
+                    showToast(json.error || '领取失败', true);
+                    await refreshMiningStatus();
+                }
+            } catch (e) {
+                showToast('领取失败: ' + e.message, true);
+                await refreshMiningStatus();
+            }
+            btn.disabled = false;
+        }
+
+        async function refreshMonitorPanel() {
+            try {
+                const [statusRes, metricsRes] = await Promise.all([
+                    fetch(`${API_BASE}/status`).then(r => r.json()),
+                    fetch(`${API_BASE}/metrics`).then(r => r.text())
+                ]);
+                const height = statusRes.success ? statusRes.data.height : null;
+                const metrics = parseMetricsText(metricsRes);
+                document.getElementById('mon-height').textContent = height != null ? height : (metrics.block_height != null ? metrics.block_height : '--');
+                document.getElementById('mon-tx').textContent = metrics.tx_count != null ? metrics.tx_count : '--';
+                document.getElementById('mon-peers').textContent = metrics.peer_count != null ? metrics.peer_count : '--';
+                document.getElementById('mon-uptime').textContent = formatUptime(metrics.uptime_seconds);
+            } catch (e) {
+                document.getElementById('mon-height').textContent = '--';
+                document.getElementById('mon-tx').textContent = '--';
+                document.getElementById('mon-peers').textContent = '--';
+                document.getElementById('mon-uptime').textContent = '--';
+            }
+        }
+
+        async function loadWallet() {
+            // 尝试从节点加载钱包
+            try {
+                const res = await fetch(`${API_BASE}/wallet/accounts`);
+                const json = await res.json();
+                // 适配后端返回格式: { success: true, data: [...] }
+                if (json.success && json.data) {
+                    return { accounts: json.data };
+                }
+                return json;
+            } catch {
+                return null;
+            }
+        }
+
+        async function updateBalance() {
+            if (!currentAddress) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/account/balance?address=${currentAddress}`);
+                const data = await res.json();
+                
+                if (data.success) {
+                    const balance = parseFloat(data.data.balance) / 1e18;
+                    document.getElementById('balance').textContent = balance.toFixed(2);
+                }
+            } catch (e) {
+                console.error('获取余额失败:', e);
+            }
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            if (tab === 'send') {
+                document.getElementById('send-form').style.display = 'block';
+                document.getElementById('receive-form').style.display = 'none';
+            } else {
+                document.getElementById('send-form').style.display = 'none';
+                document.getElementById('receive-form').style.display = 'block';
+            }
+        }
+
+        function downloadWalletBackup() {
+            fetch(API_BASE + '/wallet/backup')
+                .then(r => { if (!r.ok) throw new Error(r.statusText); return r.blob(); })
+                .then(blob => {
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    a.download = 'pole-wallet-backup-' + new Date().toISOString().slice(0,10) + '.json';
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                    showToast('备份文件已下载，请妥善保管（含私钥）');
+                })
+                .catch(e => { showToast('备份失败: ' + e.message, true); });
+        }
+
+        function copyAddress() {
+            navigator.clipboard.writeText(currentAddress);
+            const btn = document.querySelector('.copy-btn');
+            btn.textContent = '已复制';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                btn.textContent = '复制';
+                btn.classList.remove('copied');
+            }, 2000);
+        }
+
+        function setMaxAmount() {
+            const balance = document.getElementById('balance').textContent;
+            document.getElementById('amount').value = parseFloat(balance);
+        }
+
+        async function sendTransaction() {
+            const toAddress = document.getElementById('to-address').value.trim();
+            const amount = document.getElementById('amount').value;
+            const fee = document.getElementById('fee').value;
+
+            if (!toAddress) {
+                showToast('请输入收款地址', true);
+                return;
+            }
+
+            if (!amount || parseFloat(amount) <= 0) {
+                showToast('请输入有效金额', true);
+                return;
+            }
+
+            const btn = document.querySelector('.send-btn');
+            btn.disabled = true;
+            btn.textContent = '发送中...';
+
+            try {
+                // 创建交易
+                const tx = {
+                    type: 0,
+                    from: currentAddress,
+                    nonce: Date.now(),
+                    fee: (parseFloat(fee) * 1e18).toString(),
+                    transfer: {
+                        from: currentAddress,
+                        to: toAddress,
+                        amount: (parseFloat(amount) * 1e18).toString(),
+                        fee: (parseFloat(fee) * 1e18).toString()
+                    }
+                };
+
+                // 签名交易
+                const signRes = await fetch(`${API_BASE}/wallet/sign`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(tx)
+                });
+                const signedTx = await signRes.json();
+
+                if (!signedTx.success) {
+                    throw new Error(signedTx.error || '签名失败');
+                }
+
+                // 广播交易
+                const broadcastRes = await fetch(`${API_BASE}/tx/broadcast`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(signedTx.data)
+                });
+                const result = await broadcastRes.json();
+
+                if (result.success) {
+                    showToast('交易已广播: ' + result.data.tx_hash.substring(0, 16) + '...');
+                    // 清空表单
+                    document.getElementById('to-address').value = '';
+                    document.getElementById('amount').value = '';
+                    // 更新余额
+                    await updateBalance();
+                } else {
+                    throw new Error(result.error || '广播失败');
+                }
+            } catch (e) {
+                showToast(e.message, true);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = '发送 POLE';
+            }
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = 'toast' + (isError ? ' error' : '');
+            toast.classList.add('show');
+            setTimeout(() => toast.classList.remove('show'), 3000);
+        }
+
+        // 页面加载时初始化
+        (function() {
+            function onErr(e) {
+                console.error('Wallet init error:', e);
+                var label = document.getElementById('node-label');
+                if (label) { label.textContent = '加载异常'; label.classList.add('offline'); }
+                if (typeof showToast === 'function') {
+                    showToast('页面加载失败: ' + (e && e.message ? e.message : '请刷新或检查控制台'), true);
+                } else {
+                    document.body.insertAdjacentHTML('beforeend', '<p style="padding:20px;text-align:center;color:#ff4444;">加载失败: ' + (e && e.message ? e.message : '') + '</p>');
+                }
+            }
+            try {
+                init().catch(onErr);
+            } catch (e) {
+                onErr(e);
+            }
+        })();
+    </script>
+</body>
+</html>

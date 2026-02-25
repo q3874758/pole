@@ -1,0 +1,26 @@
+{
+  "chain_id": "pole-test-vesting",
+  "genesis_time": 0,
+  "token": {
+    "name": "Proof of Live Engagement",
+    "symbol": "POLE",
+    "decimals": 18,
+    "total_supply": "1000000000000000000000000000"
+  },
+  "allocations": [
+    {"label": "NodeRewardPool", "address": "pole1noderewardpool000000000000000000000", "amount": "590000000000000000000000000"},
+    {"label": "MiningPool", "address": "pole1miningpool00000000000000000000", "amount": "10000000000000000000000000"},
+    {"label": "Ecosystem", "address": "pole1ecosystem0000000000000000000000000", "amount": "200000000000000000000000000"},
+    {"label": "Community", "address": "pole1community00000000000000000000000000", "amount": "150000000000000000000000000"},
+    {"label": "Investors", "address": "pole1investors00000000000000000000000000", "amount": "20000000000000000000000000"}
+  ],
+  "vesting": [
+    {
+      "beneficiary": "dfdb4bdd50f5fa6c499461c78bfc69aa645a281e",
+      "total": "30000000000000000000000000",
+      "lock_months": 0,
+      "linear_months": 24
+    }
+  ],
+  "validators": []
+}

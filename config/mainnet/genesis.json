@@ -1,0 +1,31 @@
+{
+  "chain_id": "pole-mainnet-1",
+  "genesis_time": 1767225600,
+  "chain_name": "PoLE Mainnet",
+  "token": {
+    "name": "Proof of Live Engagement",
+    "symbol": "POLE",
+    "decimals": 18,
+    "total_supply": "1000000000000000000000000000"
+  },
+  "allocations": [
+    {"label": "NodeRewardPool", "address": "pole1qql8ag4cluz6r4dz28p3w00dnc9w8ueulg2gmc", "amount": "590000000000000000000000000"},
+    {"label": "MiningPool", "address": "pole1miningpool00000000000000000000", "amount": "10000000000000000000000000"},
+    {"label": "Ecosystem", "address": "pole1qrwun0msv3x6nkw3c9v3x6nkw3c9v3x6nkw3c", "amount": "200000000000000000000000000"},
+    {"label": "Community", "address": "pole1q9hk0m5v3x6nkw3c9v3x6nkw3c9v3x6nkw3c", "amount": "150000000000000000000000000"},
+    {"label": "Investors", "address": "pole1q7zg4p6nkw3c9v3x6nkw3c9v3x6nkw3c", "amount": "20000000000000000000000000"}
+  ],
+  "vesting": [
+    {
+      "beneficiary": "dfdb4bdd50f5fa6c499461c78bfc69aa645a281e",
+      "total": "30000000000000000000000000",
+      "lock_months": 12,
+      "linear_months": 24
+    }
+  ],
+  "validators": [
+    {"address": "polevaloper1qql8ag4cluz6r4dz28p3w00dnc9w8ueulg2gmc", "pub_key": "", "stake": "10000000000000000000000", "commission": 5}
+  ],
+  "parameters": {"max_validators": 21, "epoch_length": 14400, "unbonding_period_days": 21, "inflation_rate": "0.2", "burn_ratio": "0.25"},
+  "bootnodes": ["/ip4/127.0.0.1/tcp/26656/p2p/pole1..."]
+}

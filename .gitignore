@@ -1,0 +1,34 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Build output
+node_modules/
+dist/
+build/
+
+# Data
+data/
+storage/
+wallet.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Go
+vendor/
+
+# Temp
+tmp/

@@ -1,0 +1,38 @@
+{
+  "chain_id": "pole-mainnet-1",
+  "genesis_time": 0,
+  "token": {
+    "total_supply": "1000000000000000000000000000",
+    "name": "Proof of Live Engagement",
+    "symbol": "POLE",
+    "decimals": 18
+  },
+  "allocations": [
+    {
+      "amount": "590000000000000000000000000",
+      "address": "pole1noderewardpool000000000000000000000",
+      "label": "NodeRewardPool"
+    },
+    {
+      "amount": "10000000000000000000000000",
+      "address": "pole1miningpool00000000000000000000",
+      "label": "MiningPool"
+    },
+    {
+      "amount": "200000000000000000000000000",
+      "address": "pole1ecosystem0000000000000000000000000",
+      "label": "Ecosystem"
+    },
+    {
+      "amount": "150000000000000000000000000",
+      "address": "pole1community00000000000000000000000000",
+      "label": "Community"
+    },
+    {
+      "amount": "50000000000000000000000000",
+      "address": "pole1teamandinvestors000000000000000000",
+      "label": "TeamAndInvestors"
+    }
+  ],
+  "validators": []
+}

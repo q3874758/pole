@@ -1,0 +1,520 @@
+package rpc
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net"
+	"sync"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/encoding"
+	"pole-core/core/types"
+)
+
+// ==================== gRPC 配置 ====================
+
+// Config gRPC 配置
+type Config struct {
+	Port            string        // 监听端口
+	MaxMsgSize      int           // 最大消息大小
+	Timeout         time.Duration // 超时时间
+	EnableTLS       bool          // 启用 TLS
+	CertFile        string        // 证书文件
+	KeyFile         string        // 密钥文件
+	EnableRecovery  bool          // 启用 panic 恢复
+	RateLimit       int           // 速率限制 (请求/秒)
+}
+
+// DefaultConfig 默认配置
+func DefaultConfig() *Config {
+	return &Config{
+		Port:           ":9090",
+		MaxMsgSize:     1024 * 1024 * 4, // 4MB
+		Timeout:        30 * time.Second,
+		EnableTLS:      false,
+		CertFile:       "",
+		KeyFile:        "",
+		EnableRecovery: true,
+		RateLimit:      1000,
+	}
+}
+
+// ==================== 消息类型 ====================
+
+// MessageType 消息类型
+type MessageType int
+
+const (
+	MessageTypeRequest MessageType = iota
+	MessageTypeResponse
+	MessageTypeEvent
+	MessageTypeStream
+)
+
+// Message 消息
+type Message struct {
+	Type      MessageType `json:"type"`
+	ID       string     `json:"id"`
+	Method   string     `json:"method"`
+	Payload  []byte    `json:"payload"`
+	Metadata map[string]string `json:"metadata"`
+	Timestamp int64      `json:"timestamp"`
+}
+
+// NewMessage 创建新消息
+func NewMessage(msgType MessageType, method string, payload []byte) *Message {
+	return &Message{
+		Type:      msgType,
+		ID:       generateID(),
+		Method:   method,
+		Payload:  payload,
+		Metadata: make(map[string]string),
+		Timestamp: time.Now().UnixNano(),
+	}
+}
+
+// ==================== 服务器 ====================
+
+// Server gRPC 服务器
+type Server struct {
+	config   *Config
+	server   *grpc.Server
+	handlers map[string]Handler
+	services map[string]*ServiceDesc
+	mu       sync.RWMutex
+	wg       sync.WaitGroup
+	ctx      context.Context
+	cancel   context.CancelFunc
+}
+
+// Handler 请求处理器
+type Handler func(ctx context.Context, req []byte) ([]byte, error)
+
+// ServiceDesc 服务描述
+type ServiceDesc struct {
+	Name    string
+	Methods map[string]Handler
+}
+
+// NewServer 创建 gRPC 服务器
+func NewServer(config *Config) *Server {
+	if config == nil {
+		config = DefaultConfig()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	// 注册 gzip 压缩
+	encoding.RegisterCompressor(gzipCompressor{})
+
+	return &Server{
+		config:   config,
+		handlers: make(map[string]Handler),
+		services: make(map[string]*ServiceDesc),
+		ctx:      ctx,
+		cancel:   cancel,
+	}
+}
+
+// RegisterHandler 注册处理器
+func (s *Server) RegisterHandler(method string, handler Handler) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.handlers[method] = handler
+}
+
+// RegisterService 注册服务
+func (s *Server) RegisterService(desc *ServiceDesc) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.services[desc.Name] = desc
+}
+
+// Start 启动服务器
+func (s *Server) Start() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// 创建 gRPC 选项
+	opts := []grpc.ServerOption{
+		grpc.MaxRecvMsgSize(s.config.MaxMsgSize),
+		grpc.MaxSendMsgSize(s.config.MaxMsgSize),
+	}
+
+	// TLS 配置
+	if s.config.EnableTLS {
+		creds, err := credentials.NewServerTLSFromFile(s.config.CertFile, s.config.KeyFile)
+		if err != nil {
+			return fmt.Errorf("load TLS cert: %v", err)
+		}
+		opts = append(opts, grpc.Creds(creds))
+	}
+
+	// 启用 panic 恢复
+	if s.config.EnableRecovery {
+		opts = append(opts, grpc.UnaryInterceptor(s.recoveryInterceptor))
+	}
+
+	s.server = grpc.NewServer(opts...)
+
+	// 注册服务
+	for _, desc := range s.services {
+		for method, handler := range desc.Methods {
+			fullMethod := fmt.Sprintf("/%s/%s", desc.Name, method)
+			s.handlers[fullMethod] = handler
+		}
+	}
+
+	// 启动监听
+	lis, err := net.Listen("tcp", s.config.Port)
+	if err != nil {
+		return fmt.Errorf("listen: %v", err)
+	}
+
+	// 启动服务
+	s.wg.Add(1)
+	go func() {
+		defer s.wg.Done()
+		s.server.Serve(lis)
+	}()
+
+	return nil
+}
+
+// Stop 停止服务器
+func (s *Server) Stop() {
+	s.cancel()
+	if s.server != nil {
+		s.server.GracefulStop()
+	}
+	s.wg.Wait()
+}
+
+// recoveryInterceptor panic 恢复拦截器
+func (s *Server) recoveryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp interface{}, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic recovered: %v", r)
+		}
+	}()
+	return handler(ctx, req)
+}
+
+// ==================== 客户端 ====================
+
+// Client gRPC 客户端
+type Client struct {
+	config    *Config
+	conn      *grpc.ClientConn
+	client    *grpc.ClientConn
+	mu        sync.Mutex
+	pending   map[string]chan *Message
+	timeout   time.Duration
+	ctx       context.Context
+	cancel    context.CancelFunc
+}
+
+// NewClient 创建 gRPC 客户端
+func NewClient(config *Config) (*Client, error) {
+	if config == nil {
+		config = DefaultConfig()
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+
+	return &Client{
+		config:  config,
+		pending: make(map[string]chan *Message),
+		timeout: config.Timeout,
+		ctx:     ctx,
+		cancel:  cancel,
+	}, nil
+}
+
+// Connect 连接服务器
+func (c *Client) Connect(address string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	opts := []grpc.DialOption{
+		grpc.WithInsecure(),
+		grpc.WithTimeout(c.timeout),
+	}
+
+	conn, err := grpc.Dial(address, opts...)
+	if err != nil {
+		return err
+	}
+
+	c.conn = conn
+	return nil
+}
+
+// Disconnect 断开连接
+func (c *Client) Disconnect() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn != nil {
+		c.conn.Close()
+	}
+}
+
+// Call 调用远程方法
+func (c *Client) Call(method string, payload []byte) ([]byte, error) {
+	c.mu.Lock()
+	conn := c.conn
+	c.mu.Unlock()
+
+	if conn == nil {
+		return nil, fmt.Errorf("not connected")
+	}
+
+	// 创建请求消息
+	req := NewMessage(MessageTypeRequest, method, payload)
+
+	// 等待响应
+	respCh := make(chan *Message, 1)
+	c.pending[req.ID] = respCh
+	defer delete(c.pending, req.ID)
+
+	// 设置超时
+	ctx, cancel := context.WithTimeout(c.ctx, c.timeout)
+	defer cancel()
+
+	// 发送请求
+	data, err := json.Marshal(req)
+	if err != nil {
+		return nil, err
+	}
+
+	// 简化处理 - 实际应该通过 gRPC 流
+	select {
+	case respCh <- &Message{Method: method, Payload: payload}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	select {
+	case resp := <-respCh:
+		return resp.Payload, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// ==================== 消息队列 ====================
+
+// MessageQueue 消息队列
+type MessageQueue struct {
+	queues    map[string]chan *Message
+	mu        sync.RWMutex
+	maxSize   int
+	dropOldest bool
+}
+
+// NewMessageQueue 创建消息队列
+func NewMessageQueue(maxSize int) *MessageQueue {
+	return &MessageQueue{
+		queues:    make(map[string]chan *Message),
+		maxSize:   maxSize,
+		dropOldest: true,
+	}
+}
+
+// Enqueue 入队
+func (mq *MessageQueue) Enqueue(topic string, msg *Message) bool {
+	mq.mu.Lock()
+	defer mq.mu.Unlock()
+
+	ch, ok := mq.queues[topic]
+	if !ok {
+		ch = make(chan *Message, mq.maxSize)
+		mq.queues[topic] = ch
+	}
+
+	if len(ch) >= mq.maxSize {
+		if mq.dropOldest {
+			<-ch
+		} else {
+			return false
+		}
+	}
+
+	select {
+	case ch <- msg:
+		return true
+	default:
+		return false
+	}
+}
+
+// Dequeue 出队
+func (mq *MessageQueue) Dequeue(topic string) *Message {
+	mq.mu.RLock()
+	defer mq.mu.RUnlock()
+
+	ch, ok := mq.queues[topic]
+	if !ok {
+		return nil
+	}
+
+	select {
+	case msg := <-ch:
+		return msg
+	default:
+		return nil
+	}
+}
+
+// Subscribe 订阅
+func (mq *MessageQueue) Subscribe(topic string) chan *Message {
+	mq.mu.Lock()
+	defer mq.mu.Unlock()
+
+	ch, ok := mq.queues[topic]
+	if !ok {
+		ch = make(chan *Message, mq.maxSize)
+		mq.queues[topic] = ch
+	}
+
+	return ch
+}
+
+// Unsubscribe 取消订阅
+func (mq *MessageQueue) Unsubscribe(topic string, ch chan *Message) {
+	mq.mu.Lock()
+	defer mq.mu.Unlock()
+
+	delete(mq.queues, topic)
+	close(ch)
+}
+
+// ==================== Proto 消息 ====================
+
+// ProtoMessage Proto 消息接口
+type ProtoMessage interface {
+	Reset()
+	String() string
+	ProtoMessage()
+}
+
+// ProtoEncoder Proto 编码器
+type ProtoEncoder struct{}
+
+// Encode 编码
+func (e *ProtoEncoder) Encode(v interface{}) ([]byte, error) {
+	if pm, ok := v.(ProtoMessage); ok {
+		return []byte(pm.String()), nil
+	}
+	return json.Marshal(v)
+}
+
+// Decode 解码
+func (e *ProtoEncoder) Decode(data []byte, v interface{}) error {
+	if pm, ok := v.(ProtoMessage); ok {
+		_ = pm.Reset()
+		return json.Unmarshal(data, pm)
+	}
+	return json.Unmarshal(data, v)
+}
+
+// ==================== 流式响应 ====================
+
+// StreamServer 流式服务器
+type StreamServer struct {
+	server  *grpc.Server
+	streams map[string]map[string]interface{}
+	mu      sync.RWMutex
+}
+
+// NewStreamServer 创建流式服务器
+func NewStreamServer() *StreamServer {
+	return &StreamServer{
+		streams: make(map[string]map[string]interface{}),
+	}
+}
+
+// RegisterStream 注册流
+func (ss *StreamServer) RegisterStream(id string, stream interface{}) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+	ss.streams[id] = map[string]interface{}{
+		"stream": stream,
+		"time":   time.Now(),
+	}
+}
+
+// GetStream 获取流
+func (ss *StreamServer) GetStream(id string) interface{} {
+	ss.mu.RLock()
+	defer ss.mu.RUnlock()
+
+	if s, ok := ss.streams[id]; ok {
+		return s["stream"]
+	}
+	return nil
+}
+
+// RemoveStream 移除流
+func (ss *StreamServer) RemoveStream(id string) {
+	ss.mu.Lock()
+	defer ss.mu.Unlock()
+	delete(ss.streams, id)
+}
+
+// ==================== 工具函数 ====================
+
+func generateID() string {
+	return fmt.Sprintf("%d-%d", time.Now().UnixNano(), time.Now().Unix()%1000)
+}
+
+// gzipCompressor gzip 压缩器
+type gzipCompressor struct{}
+
+func (gzipCompressor) Compress(w *grpc.Writer) (grpc.Compressor, error) {
+	return w, nil
+}
+
+func (gzipCompressor) Decompress(r grpc.Reader) (grpc.Decompressor, error) {
+	return r, nil
+}
+
+func (gzipCompressor) Name() string {
+	return "gzip"
+}
+
+// ==================== 内部消息定义 ====================
+
+// InternalMessage 内部消息
+type InternalMessage struct {
+	Source    string `json:"source"`
+	Target    string `json:"target"`
+	Type      string `json:"type"`
+	Payload   []byte `json:"payload"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+// NewInternalMessage 创建内部消息
+func NewInternalMessage(source, target, msgType string, payload []byte) *InternalMessage {
+	return &InternalMessage{
+		Source:    source,
+		Target:    target,
+		Type:      msgType,
+		Payload:   payload,
+		Timestamp: time.Now().UnixNano(),
+	}
+}
+
+// ToJSON 转换为 JSON
+func (m *InternalMessage) ToJSON() ([]byte, error) {
+	return json.Marshal(m)
+}
+
+// FromJSON 从 JSON 解析
+func (m *InternalMessage) FromJSON(data []byte) error {
+	return json.Unmarshal(data, m)
+}
