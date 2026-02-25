@@ -4,8 +4,10 @@ go 1.24.0
 
 require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4
+	github.com/cosmos/cosmos-sdk v0.50.10
 	github.com/google/uuid v1.6.0
 	github.com/shopspring/decimal v1.4.0
+	github.com/tendermint/tendermint v0.35.9
 	golang.org/x/crypto v0.31.0
 	google.golang.org/grpc v1.79.1
 )
