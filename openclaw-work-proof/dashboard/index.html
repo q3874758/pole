@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenClaw 工作量证明仪表盘</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0d1117;
+            color: #c9d1d9;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            border-bottom: 1px solid #30363d;
+            margin-bottom: 30px;
+        }
+        
+        h1 {
+            font-size: 24px;
+            color: #58a6ff;
+        }
+        
+        .refresh-btn {
+            background: #238636;
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .refresh-btn:hover {
+            background: #2ea043;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: #8b949e;
+            margin-bottom: 8px;
+        }
+        
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #58a6ff;
+        }
+        
+        .stat-value.green { color: #3fb950; }
+        .stat-value.yellow { color: #d29922; }
+        .stat-value.red { color: #f85149; }
+        
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .chart-card {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        .chart-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+        
+        .records-table {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #30363d;
+        }
+        
+        th {
+            background: #21262d;
+            font-weight: 600;
+            font-size: 14px;
+            color: #8b949e;
+        }
+        
+        td {
+            font-size: 14px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+        }
+        
+        .status-completed { background: #238636; color: white; }
+        .status-failed { background: #da3633; color: white; }
+        .status-pending { background: #d29922; color: black; }
+        
+        .proof-hash {
+            font-family: monospace;
+            font-size: 12px;
+            color: #8b949e;
+            max-width: 150px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .agent-id {
+            font-family: monospace;
+            font-size: 12px;
+            color: #58a6ff;
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #8b949e;
+        }
+        
+        @media (max-width: 768px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 OpenClaw 工作量证明</h1>
+            <button class="refresh-btn" onclick="refresh()">🔄 刷新</button>
+        </header>
+        
+        <!-- 核心指标 -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">总任务数</div>
+                <div class="stat-value" id="totalTasks">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">完成任务</div>
+                <div class="stat-value green" id="completedTasks">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">总 Token 消耗</div>
+                <div class="stat-value" id="totalTokens">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">代码行数</div>
+                <div class="stat-value green" id="totalCodeLines">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Bug 修复</div>
+                <div class="stat-value yellow" id="bugsFixed">-</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">总价值</div>
+                <div class="stat-value green" id="totalValue">-</div>
+            </div>
+        </div>
+        
+        <!-- 图表 -->
+        <div class="charts-grid">
+            <div class="chart-card">
+                <div class="chart-title">📊 任务类型分布</div>
+                <canvas id="taskChart"></canvas>
+            </div>
+            <div class="chart-card">
+                <div class="chart-title">📈 价值趋势</div>
+                <canvas id="trendChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- 最近记录 -->
+        <div class="records-table">
+            <table>
+                <thead>
+                    <tr>
+                        <th>时间</th>
+                        <th>Agent</th>
+                        <th>任务类型</th>
+                        <th>Token</th>
+                        <th>代码行</th>
+                        <th>价值</th>
+                        <th>状态</th>
+                        <th>证明</th>
+                    </tr>
+                </thead>
+                <tbody id="recordsBody">
+                    <tr><td colspan="8" class="loading">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        let taskChart, trendChart;
+        
+        async function refresh() {
+            try {
+                const [statsRes, recordsRes] = await Promise.all([
+                    fetch('/api/stats'),
+                    fetch('/api/records')
+                ]);
+                
+                const stats = await statsRes.json();
+                const records = await recordsRes.json();
+                
+                // 更新统计
+                document.getElementById('totalTasks').textContent = stats.total_tasks || 0;
+                document.getElementById('completedTasks').textContent = stats.completed_tasks || 0;
+                document.getElementById('totalTokens').textContent = formatNumber(stats.total_tokens || 0);
+                document.getElementById('totalCodeLines').textContent = formatNumber(stats.total_code_lines || 0);
+                document.getElementById('bugsFixed').textContent = stats.bugs_fixed || 0;
+                document.getElementById('totalValue').textContent = (stats.total_value || 0).toFixed(2);
+                
+                // 更新表格
+                updateTable(records);
+                
+                // 更新图表
+                updateCharts(stats, records);
+                
+            } catch (e) {
+                console.error('刷新失败:', e);
+            }
+        }
+        
+        function updateTable(records) {
+            const tbody = document.getElementById('recordsBody');
+            if (!records || records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="loading">暂无数据</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = records.slice(0, 20).map(r => `
+                <tr>
+                    <td>${formatTime(r.completed_at)}</td>
+                    <td class="agent-id">${r.agent_id || '-'}</td>
+                    <td>${r.task_type || '-'}</td>
+                    <td>${formatNumber((r.tokens_input || 0) + (r.tokens_output || 0))}</td>
+                    <td>${r.code_lines || 0}</td>
+                    <td>${(r.value || 0).toFixed(2)}</td>
+                    <td><span class="status-badge status-${r.status}">${r.status}</span></td>
+                    <td class="proof-hash" title="${r.proof_hash || '-'}">${r.proof_hash ? r.proof_hash.slice(0, 16) + '...' : '-'}</td>
+                </tr>
+            `).join('');
+        }
+        
+        function updateCharts(stats, records) {
+            // 任务类型分布
+            const taskData = stats.by_task_type || {};
+            const labels = Object.keys(taskData);
+            const data = Object.values(taskData);
+            
+            if (taskChart) taskChart.destroy();
+            taskChart = new Chart(document.getElementById('taskChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: [
+                            '#58a6ff', '#3fb950', '#d29922', '#f85149',
+                            '#a371f7', '#79c0ff', '#56d364', '#e3b341'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { position: 'right' }
+                    }
+                }
+            });
+            
+            // 价值趋势
+            if (trendChart) trendChart.destroy();
+            const trendData = records.slice(0, 30).reverse().map(r => r.value || 0);
+            trendChart = new Chart(document.getElementById('trendChart'), {
+                type: 'line',
+                data: {
+                    labels: trendData.map((_, i) => `#${i+1}`),
+                    datasets: [{
+                        label: '工作价值',
+                        data: trendData,
+                        borderColor: '#58a6ff',
+                        backgroundColor: 'rgba(88, 166, 255, 0.1)',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { beginAtZero: true }
+                    }
+                }
+            });
+        }
+        
+        function formatNumber(n) {
+            if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+            if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+            return n.toString();
+        }
+        
+        function formatTime(ts) {
+            if (!ts) return '-';
+            return new Date(ts).toLocaleString('zh-CN');
+        }
+        
+        // 初始加载
+        refresh();
+        setInterval(refresh, 30000);
+    </script>
+</body>
+</html>
